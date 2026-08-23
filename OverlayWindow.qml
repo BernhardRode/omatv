@@ -353,6 +353,9 @@ PanelWindow {
             height: 18
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
+            // Playlist-supplied channel names are untrusted: never let the
+            // styled-text parser look at them.
+            textFormat: Text.PlainText
             text: modelData.name
             color: Qt.rgba(1, 1, 1, 0.9)
             font.pixelSize: 13
@@ -635,6 +638,7 @@ PanelWindow {
         height: 18
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
+        textFormat: Text.PlainText // dragGhostName is playlist-derived, see nameLabel
         text: host ? host.dragGhostName : ""
         color: Qt.rgba(1, 1, 1, 0.9)
         font.pixelSize: 13

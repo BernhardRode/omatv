@@ -115,11 +115,16 @@ QtObject {
   }
 
   function play(channel) {
+    // Streams are handed to mpv verbatim, so they pass the same gate as
+    // everything else remote: HTTPS on a public host or no playback.
+    var url = Model.isPublicHttpsUrl(channel && channel.url)
+    if (!url) return
+    var title = String(channel.name || url).replace(/[\r\n\t]+/g, " ")
     playProcess.command = [
       "mpv",
-      "--force-media-title=" + channel.name,
+      "--force-media-title=" + Model.capField(title, 256),
       "--really-quiet",
-      channel.url
+      url
     ]
     playProcess.running = true
   }
@@ -159,6 +164,11 @@ QtObject {
     revision++
   }
 
+  // Config read boundary: this file aggregates playlist-derived strings
+  // (favorite names/logos/URLs), so everything coming out of it passes
+  // through Model.parseConfig, which enforces MAX_CONFIG_CHARS -- anything
+  // larger is treated as corrupt and reset to defaults rather than parsed.
+  // The path itself is pinned to <config dir>/omatv/config.json.
   property FileView configFile: FileView {
     path: root.configPath
     watchChanges: true
@@ -176,8 +186,12 @@ QtObject {
 
   property bool fetchPending: false
   property var fetchQueue: []
-  property string fetchingUrl: ""
+  property string fetchingUrl: "" // the playlist URL as configured -- used for attribution/errors
+  property string fetchHopUrl: "" // the currently validated hop being talked to
+  property int fetchHops: 0
+  property bool fetchDownloading: false
   property string fetchBuffer: ""
+  property string fetchHeaders: ""
 
   function requestFetch() {
     if (root.fetchPending || root.loading) return
@@ -202,25 +216,93 @@ QtObject {
       root.fetchingUrl = ""
       return
     }
+    // Redirects are followed manually, one hop at a time: blind `curl -L`
+    // would happily chase a playlist's Location header into the user's LAN.
+    // Each hop is probed first (status + Location only, body discarded),
+    // validated through Model.resolveRedirect/isPublicHttpsUrl, and only
+    // then downloaded from the final destination.
     root.fetchingUrl = root.fetchQueue.shift()
-    fetchProcess.command = ["curl", "-fsSL", "--max-time", "60", root.fetchingUrl]
+    root.fetchHopUrl = root.fetchingUrl
+    root.fetchHops = 0
+    root.fetchDownloading = false
+    probeNextHop()
+  }
+
+  readonly property var curlBaseArgs: [
+    "--proto", "=https",        // https only, including across redirects
+    "--proto-redir", "=https",
+    "--max-redirs", "0"         // we do the hop validation ourselves
+  ]
+
+  function probeNextHop() {
+    fetchProcess.command = ["curl"].concat(root.curlBaseArgs).concat([
+      "-sS", "-o", "/dev/null", "-D", "-", "--max-time", "15", root.fetchHopUrl
+    ])
     fetchProcess.running = true
   }
 
-  function finishFetch(exitCode) {
+  function downloadFinalHop() {
+    root.fetchDownloading = true
+    fetchProcess.command = ["curl"].concat(root.curlBaseArgs).concat([
+      "-fsS", "--max-time", "30",
+      "--max-filesize", String(Model.MAX_PLAYLIST_BYTES), // hard byte ceiling at the producer
+      root.fetchHopUrl
+    ])
+    fetchProcess.running = true
+  }
+
+  function failFetch(reason) {
+    root.lastError = reason + ": " + Model.shortPlaylistLabel(root.fetchingUrl)
+    root.fetchBuffer = ""
+    root.fetchingUrl = ""
+    root.fetchHopUrl = ""
+    fetchNext()
+  }
+
+  function handleFetchExit(exitCode) {
+    var headers = String(root.fetchHeaders || "")
+    root.fetchHeaders = ""
+
+    if (!root.fetchDownloading) {
+      if (exitCode !== 0) return failFetch("playlist failed")
+
+      var statusMatch = /^HTTP\/[\d.]+[ \t]+(\d{3})/m.exec(headers)
+      var status = statusMatch ? parseInt(statusMatch[1], 10) : 0
+
+      if (status >= 300 && status < 400) {
+        var locationMatches = headers.match(/^Location:[ \t]*(.*)$/gim)
+        var location = locationMatches && locationMatches.length > 0
+          ? locationMatches[locationMatches.length - 1].replace(/^Location:[ \t]*/i, "").trim() : ""
+        if (location === "") return failFetch("redirect without location")
+        if (root.fetchHops + 1 > Model.MAX_REDIRECT_HOPS) return failFetch("too many redirects")
+
+        var next = Model.resolveRedirect(root.fetchHopUrl, location)
+        if (!next) return failFetch("unsafe redirect blocked")
+        root.fetchHops++
+        root.fetchHopUrl = next
+        return probeNextHop()
+      }
+
+      if (status !== 200) return failFetch("unexpected status " + (status || "none"))
+      return downloadFinalHop()
+    }
+
     var url = root.fetchingUrl
     root.fetchingUrl = ""
+    root.fetchHopUrl = ""
 
     if (exitCode !== 0) {
       root.lastError = "playlist failed: " + Model.shortPlaylistLabel(url)
     } else {
+      // Second byte ceiling client-side: parseM3u truncates to
+      // MAX_PLAYLIST_BYTES even if a server ignores curl's limit.
       var parsed = Model.parseM3u(root.fetchBuffer, url)
       if (parsed.length === 0) {
         root.lastError = "empty playlist: " + Model.shortPlaylistLabel(url)
       } else {
-        var next = root.channelGroups.slice()
-        next.push({ url: url, channels: parsed })
-        root.channelGroups = next
+        var next2 = root.channelGroups.slice()
+        next2.push({ url: url, channels: parsed })
+        root.channelGroups = next2
         revision++
       }
     }
@@ -230,7 +312,12 @@ QtObject {
 
   property Process fetchProcess: Process {
     stdout: StdioCollector {
-      onStreamFinished: { root.fetchBuffer = text }
+      onStreamFinished: {
+        // Probe phase: the dump of response headers (-D -). Download phase:
+        // the playlist body itself.
+        if (root.fetchDownloading) root.fetchBuffer = text
+        else root.fetchHeaders = text
+      }
     }
     stderr: StdioCollector {
       onStreamFinished: {
@@ -238,7 +325,7 @@ QtObject {
         if (message !== "") console.warn("omatv fetch:", message)
       }
     }
-    onExited: function(code) { root.finishFetch(code) }
+    onExited: function(code) { root.handleFetchExit(code) }
   }
 
   property Process playProcess: Process {
