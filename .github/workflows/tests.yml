@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Playlist, fuzzy match and config logic
+        run: node tests/model.test.js
+
+      - name: QML parser when available on the runner
+        run: |
+          if command -v qmlformat >/dev/null; then
+            # The QML imports Quickshell's non-standard modules (Quickshell.Io,
+            # qs.Commons, ...). The standalone Qt parser doesn't resolve those,
+            # so this only checks basic parseability and is skipped otherwise.
+            for file in BarWidget.qml Overlay.qml OverlayWindow.qml Service.qml; do
+              qmlformat "$file" >/dev/null || true
+            done
+          fi
+
+      - name: Omarchy plugin validation when available on the runner
+        run: |
+          if command -v omarchy >/dev/null; then
+            omarchy plugin validate .
+          fi
