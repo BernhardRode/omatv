@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dev.ebbo.omatv",
   "name": "OMATV",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "Bernhard Rode",
   "license": "MIT",
   "description": "Fullscreen IPTV browser: fuzzy-search combined m3u playlists and play them in mpv.",
