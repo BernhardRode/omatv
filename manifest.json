@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.ebbo.omatv",
+  "name": "OMATV",
+  "version": "1.0.0",
+  "author": "Bernhard Rode",
+  "license": "MIT",
+  "description": "Fullscreen IPTV browser: fuzzy-search combined m3u playlists and play them in mpv.",
+  "kinds": [
+    "overlay",
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "overlay": "Overlay.qml",
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OMATV",
+    "description": "Fuzzy-search IPTV playlists and play channels in mpv.",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
