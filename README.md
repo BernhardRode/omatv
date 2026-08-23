@@ -1,11 +1,12 @@
 # OMATV 📺
 
-[![omatv](assets/preview.jpg)](https://github.com/BernhardRode/omatv/releases/download/v1.1.1/demo.mp4)
-*▲ Click him. He demos.* Full 60-second walkthrough [here](https://github.com/BernhardRode/omatv/releases/download/v1.1.1/demo.mp4).
+![omatv](assets/preview.jpg)
 
 Someone looked at a tiling window manager and said "you know what this minimal, keyboard-driven, terminal-pure setup is missing? *Live television.*" That someone was me. Nobody asked. It's here anyway.
 
 **OMATV** turns your Omarchy desktop into the laziest couch experience this side of a tiling WM: fuzzy-search thousands of IPTV channels from combined m3u playlists, hit enter, and `mpv` takes over your screen in fullscreen. No Electron. No browser engine quietly eating 2GB of RAM. Just QML, curl, and regret at 3am watching infomercials.
+
+![OMATV in action](assets/demo.gif)
 
 ## 🛠️ Requirements & Dependency Lore
 
