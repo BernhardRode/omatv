@@ -6,7 +6,7 @@ Someone looked at a tiling window manager and said "you know what this minimal, 
 
 **OMATV** turns your Omarchy desktop into the laziest couch experience this side of a tiling WM: fuzzy-search thousands of IPTV channels from combined m3u playlists, hit enter, and `mpv` takes over your screen in fullscreen. No Electron. No browser engine quietly eating 2GB of RAM. Just QML, curl, and regret at 3am watching infomercials.
 
-![OMATV in action](assets/demo.gif)
+![OMATV in action](assets/demo.webp)
 
 ## 🛠️ Requirements & Dependency Lore
 
